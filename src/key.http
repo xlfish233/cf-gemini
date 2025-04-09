@@ -1,0 +1,46 @@
+@baseUrl = http://localhost:8787
+# 从你的环境变量或 Cloudflare dashboard 获取实际的 API_AUTH_KEY
+@authToken = YOUR_LOCAL_SECRET_KEY_HERE
+# 用于测试的 API 密钥示例
+@testApiKey = test-api-key-1234567891
+
+### 创建一个新的 API Key
+# @name CreateKey
+POST {{baseUrl}}/keys
+Content-Type: application/json
+x-goog-api-key: {{authToken}}
+
+{
+  "api_key": "{{testApiKey}}"
+}
+
+### 获取所有 API Keys
+# @name GetAllKeys
+GET {{baseUrl}}/keys
+x-goog-api-key: {{authToken}}
+
+### 获取指定的 API Key
+# @name GetSpecificKey
+GET {{baseUrl}}/keys/{{testApiKey}}
+x-goog-api-key: {{authToken}}
+
+### 获取指定 API Key 的使用情况
+# @name GetKeyUsage
+GET {{baseUrl}}/keys/{{testApiKey}}/usage
+x-goog-api-key: {{authToken}}
+
+### 获取指定 API Key 针对特定模型的使用情况
+# @name GetKeyUsageForModel
+GET {{baseUrl}}/keys/{{testApiKey}}/usage?model=gpt-4
+x-goog-api-key: {{authToken}}
+
+### 获取所有使用记录 (谨慎使用，可能返回大量数据)
+# @name GetAllUsage
+GET {{baseUrl}}/keys/usage
+x-goog-api-key: {{authToken}}
+
+### 删除指定的 API Key
+# @name DeleteKey
+DELETE {{baseUrl}}/keys/{{testApiKey}}
+x-goog-api-key: {{authToken}}
+

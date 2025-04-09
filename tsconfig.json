@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "lib": [
+      "ESNext"
+    ],
+    "types": [
+      "@cloudflare/workers-types/2023-07-01",
+      "bun", // 添加 Bun 类型
+      "node" // 添加 Node.js 类型
+    ],
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx"
+  },
+}

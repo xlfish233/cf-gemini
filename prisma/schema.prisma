@@ -1,0 +1,33 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["driverAdapters"] // Enable D1 adapter
+}
+
+datasource db {
+  provider = "sqlite" // D1 uses SQLite
+  url      = env("DATABASE_URL") // Provided by Cloudflare binding
+}
+
+// Based on migrations/0002_modify_api_keys_and_add_usage_table.sql
+model ApiKeys {
+  api_key     String        @id
+  apiKeyUsage ApiKeyUsage[] // Relation to ApiKeyUsage
+}
+
+model ApiKeyUsage {
+  api_key String
+  model   String
+  usage   Int    @default(0)
+  error   Int    @default(0)
+  weight  Int    @default(1)
+  apiKey  ApiKeys @relation(fields: [api_key], references: [api_key], onDelete: Cascade) // Foreign key relationship
+
+  @@id([api_key, model]) // Composite primary key
+}
