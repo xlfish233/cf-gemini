@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cf-gemini",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-09",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  
+  "d1_databases": [
+    {
+      "binding": "DB", // Changed binding name to DB
+      "database_name": "cf-gemini-db", // Provide a database name
+      "database_id": "fa3a85cc-9d66-422f-8e4b-a4c83b3bef70" // Updated with created DB ID
+    }
+  ]
+}

@@ -33,4 +33,3 @@ lerna-debug.log*
 .DS_Store
 keys.csv
 src/generated/*
-wrangler.jsonc
