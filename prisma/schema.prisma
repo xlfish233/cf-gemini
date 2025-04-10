@@ -7,12 +7,12 @@
 generator client {
   provider        = "prisma-client-js"
   output          = "../src/generated/prisma"
-  previewFeatures = ["driverAdapters"] // Enable D1 adapter
+  // previewFeatures = ["driverAdapters"] // Disable D1 adapter for local dev
 }
 
 datasource db {
   provider = "sqlite" // D1 uses SQLite
-  url      = env("DATABASE_URL") // Provided by Cloudflare binding
+  url      = "file:./dev.db" // Use local SQLite file
 }
 
 // Based on migrations/0002_modify_api_keys_and_add_usage_table.sql

@@ -1,42 +1,44 @@
 import {
     type ApiKeys,
     type ApiKeyUsage,
-    PrismaClient,
+    PrismaClient, // Use standard PrismaClient
 } from "../generated/prisma";
-import { PrismaD1 } from "@prisma/adapter-d1";
+// import { PrismaD1 } from "@prisma/adapter-d1"; // Remove D1 adapter
 import { IDatabaseService } from "./interface";
-import type { D1Database } from "@cloudflare/workers-types";
+// import type { D1Database } from "@cloudflare/workers-types"; // Remove D1 type
 
-export class DbPrismaD1Service implements IDatabaseService {
+// Rename class to reflect it's now a general Prisma service
+export class DbPrismaService implements IDatabaseService {
     private prisma: PrismaClient;
 
-    constructor(d1: D1Database) {
-        if (!d1) {
+    // Constructor now accepts a PrismaClient instance
+    constructor(prismaInstance: PrismaClient) {
+        if (!prismaInstance) {
             throw new Error(
-                "D1Database binding is required for DbPrismaD1Service.",
+                "PrismaClient instance is required for DbPrismaService.",
             );
         }
-        const adapter = new PrismaD1(d1);
-        this.prisma = new PrismaClient({ adapter });
-        console.log("DbPrismaD1Service initialized.");
+        this.prisma = prismaInstance;
+        console.log("DbPrismaService initialized.");
     }
 
     async checkDbConnection(): Promise<boolean> {
         try {
-            await this.prisma.apiKeys.findFirst();
+            // Use a simple query to check connection
+            await this.prisma.$queryRaw`SELECT 1`;
             console.log(
-                "Prisma D1 database connection successful (checked via query).",
+                "Prisma database connection successful (checked via query).",
             );
             return true;
         } catch (error) {
-            console.error("Prisma D1 database connection failed:", error);
+            console.error("Prisma database connection failed:", error);
             return false;
         }
     }
 
     async getBestApiKey(model: string): Promise<string | null> {
         console.log(
-            `DbPrismaD1Service: Getting best API key for model ${model}. Prioritizing completely unused keys, then usage=0 keys.`,
+            `DbPrismaService: Getting best API key for model ${model}. Prioritizing completely unused keys, then usage=0 keys.`,
         );
         try {
             const allApiKeys = await this.prisma.apiKeys.findMany({
@@ -44,7 +46,7 @@ export class DbPrismaD1Service implements IDatabaseService {
             });
 
             if (allApiKeys.length === 0) {
-                console.error("DbPrismaD1Service: No API keys found in ApiKeys table.");
+                console.error("DbPrismaService: No API keys found in ApiKeys table.");
                 return null;
             }
             const allApiKeySet = new Set(allApiKeys.map((k) => k.api_key));
@@ -66,7 +68,7 @@ export class DbPrismaD1Service implements IDatabaseService {
 
             if (completelyUnusedKey) {
                 console.log(
-                    `DbPrismaD1Service: Found completely unused API key for model ${model}: ${
+                    `DbPrismaService: Found completely unused API key for model ${model}: ${
                         completelyUnusedKey.substring(0, 4)
                     }...`,
                 );
@@ -74,7 +76,7 @@ export class DbPrismaD1Service implements IDatabaseService {
             }
 
             console.log(
-                `DbPrismaD1Service: No completely unused key found for model ${model}. Checking for keys with usage=0.`,
+                `DbPrismaService: No completely unused key found for model ${model}. Checking for keys with usage=0.`,
             );
             const zeroUsageKeys = usageRecords
                 .filter((r) => r.usage === 0)
@@ -83,7 +85,7 @@ export class DbPrismaD1Service implements IDatabaseService {
             if (zeroUsageKeys.length > 0) {
                 const bestZeroUsageKey = zeroUsageKeys[0].api_key;
                 console.log(
-                    `DbPrismaD1Service: Found API key with usage=0 for model ${model}: ${
+                    `DbPrismaService: Found API key with usage=0 for model ${model}: ${
                         bestZeroUsageKey.substring(0, 4)
                     }... (Error count: ${zeroUsageKeys[0].error})`,
                 );
@@ -91,7 +93,7 @@ export class DbPrismaD1Service implements IDatabaseService {
             }
 
             console.log(
-                `DbPrismaD1Service: No key with usage=0 found for model ${model}. Getting best used key (usage ASC, error ASC).`,
+                `DbPrismaService: No key with usage=0 found for model ${model}. Getting best used key (usage ASC, error ASC).`,
             );
             const sortedUsageRecords = usageRecords.sort((a, b) => {
                 if (a.usage !== b.usage) {
@@ -103,21 +105,22 @@ export class DbPrismaD1Service implements IDatabaseService {
             if (sortedUsageRecords.length > 0) {
                 const bestUsedKey = sortedUsageRecords[0].api_key;
                  console.log(
-                    `DbPrismaD1Service: Found best used API key for model ${model}: ${
+                    `DbPrismaService: Found best used API key for model ${model}: ${
                         bestUsedKey.substring(0, 4)
                     }... (Usage: ${sortedUsageRecords[0].usage}, Error: ${sortedUsageRecords[0].error})`,
                 );
                 return bestUsedKey;
             } else {
                  console.warn(
-                    `DbPrismaD1Service: No usage records found for model ${model}, and somehow no completely unused key was identified. Falling back to the first key in ApiKeys.`,
+                    `DbPrismaService: No usage records found for model ${model}, and somehow no completely unused key was identified. Falling back to the first key in ApiKeys.`,
                  );
-                 return allApiKeys[0].api_key;
+                 // Ensure allApiKeys is not empty before accessing index 0
+                 return allApiKeys.length > 0 ? allApiKeys[0].api_key : null;
             }
 
         } catch (error) {
             console.error(
-                `DbPrismaD1Service: Error getting best API key for model ${model}:`,
+                `DbPrismaService: Error getting best API key for model ${model}:`,
                 error,
             );
             return null;
@@ -126,7 +129,7 @@ export class DbPrismaD1Service implements IDatabaseService {
 
     async addErrorCount(apiKey: string, model: string): Promise<void> {
         console.log(
-            `DbPrismaD1Service: Adding error count for apiKey: ${apiKey}, model: ${model}`,
+            `DbPrismaService: Adding error count for apiKey: ${apiKey}, model: ${model}`,
         );
         try {
             await this.prisma.apiKeyUsage.upsert({
@@ -144,16 +147,16 @@ export class DbPrismaD1Service implements IDatabaseService {
             });
         } catch (error) {
             console.error(
-                `DbPrismaD1Service: Error adding error count for apiKey ${apiKey}, model ${model}:`,
+                `DbPrismaService: Error adding error count for apiKey ${apiKey}, model ${model}:`,
                 error,
             );
             if (
                 typeof error === "object" && error !== null &&
                 "code" in error && typeof error.code === "string"
             ) {
-                if (error.code === "P2003") {
+                if (error.code === "P2003") { // Prisma foreign key constraint error code
                     console.error(
-                        `DbPrismaD1Service: Foreign key constraint failed. Ensure apiKey ${apiKey} exists in ApiKeys table before adding usage/error.`,
+                        `DbPrismaService: Foreign key constraint failed. Ensure apiKey ${apiKey} exists in ApiKeys table before adding usage/error.`,
                     );
                 }
             }
@@ -162,7 +165,7 @@ export class DbPrismaD1Service implements IDatabaseService {
 
     async addUsage(apiKey: string, model: string): Promise<void> {
         console.log(
-            `DbPrismaD1Service: Adding usage for apiKey: ${apiKey}, model: ${model}`,
+            `DbPrismaService: Adding usage for apiKey: ${apiKey}, model: ${model}`,
         );
         try {
             await this.prisma.apiKeyUsage.upsert({
@@ -180,16 +183,16 @@ export class DbPrismaD1Service implements IDatabaseService {
             });
         } catch (error) {
             console.error(
-                `DbPrismaD1Service: Error adding usage for apiKey ${apiKey}, model ${model}:`,
+                `DbPrismaService: Error adding usage for apiKey ${apiKey}, model ${model}:`,
                 error,
             );
-            if (
+             if (
                 typeof error === "object" && error !== null &&
                 "code" in error && typeof error.code === "string"
             ) {
-                if (error.code === "P2003") {
+                if (error.code === "P2003") { // Prisma foreign key constraint error code
                     console.error(
-                        `DbPrismaD1Service: Foreign key constraint failed. Ensure apiKey ${apiKey} exists in ApiKeys table before adding usage/error.`,
+                        `DbPrismaService: Foreign key constraint failed. Ensure apiKey ${apiKey} exists in ApiKeys table before adding usage/error.`,
                     );
                 }
             }
@@ -198,7 +201,7 @@ export class DbPrismaD1Service implements IDatabaseService {
 
     async createApiKey(apiKey: string): Promise<ApiKeys> {
         console.log(
-            `DbPrismaD1Service: Creating new API key: ${
+            `DbPrismaService: Creating new API key: ${
                 apiKey.substring(0, 4)
             }...`,
         );
@@ -209,14 +212,14 @@ export class DbPrismaD1Service implements IDatabaseService {
                 },
             });
             console.log(
-                `DbPrismaD1Service: Successfully created API key: ${
+                `DbPrismaService: Successfully created API key: ${
                     newKey.api_key.substring(0, 4)
                 }...`,
             );
             return newKey;
         } catch (error) {
             console.error(
-                `DbPrismaD1Service: Error creating API key ${
+                `DbPrismaService: Error creating API key ${
                     apiKey.substring(0, 4)
                 }...:`,
                 error,
@@ -227,7 +230,7 @@ export class DbPrismaD1Service implements IDatabaseService {
 
     async getApiKey(apiKey: string): Promise<ApiKeys | null> {
         console.log(
-            `DbPrismaD1Service: Getting API key: ${apiKey.substring(0, 4)}...`,
+            `DbPrismaService: Getting API key: ${apiKey.substring(0, 4)}...`,
         );
         try {
             const key = await this.prisma.apiKeys.findUnique({
@@ -235,13 +238,13 @@ export class DbPrismaD1Service implements IDatabaseService {
             });
             if (key) {
                 console.log(
-                    `DbPrismaD1Service: Found API key: ${
+                    `DbPrismaService: Found API key: ${
                         key.api_key.substring(0, 4)
                     }...`,
                 );
             } else {
                 console.log(
-                    `DbPrismaD1Service: API key not found: ${
+                    `DbPrismaService: API key not found: ${
                         apiKey.substring(0, 4)
                     }...`,
                 );
@@ -249,7 +252,7 @@ export class DbPrismaD1Service implements IDatabaseService {
             return key;
         } catch (error) {
             console.error(
-                `DbPrismaD1Service: Error getting API key ${
+                `DbPrismaService: Error getting API key ${
                     apiKey.substring(0, 4)
                 }...:`,
                 error,
@@ -259,14 +262,14 @@ export class DbPrismaD1Service implements IDatabaseService {
     }
 
     async getAllApiKeys(): Promise<ApiKeys[]> {
-        console.log(`DbPrismaD1Service: Getting all API keys.`);
+        console.log(`DbPrismaService: Getting all API keys.`);
         try {
             const keys = await this.prisma.apiKeys.findMany();
-            console.log(`DbPrismaD1Service: Found ${keys.length} API keys.`);
+            console.log(`DbPrismaService: Found ${keys.length} API keys.`);
             return keys;
         } catch (error) {
             console.error(
-                `DbPrismaD1Service: Error getting all API keys:`,
+                `DbPrismaService: Error getting all API keys:`,
                 error,
             );
             throw error;
@@ -275,21 +278,30 @@ export class DbPrismaD1Service implements IDatabaseService {
 
     async deleteApiKey(apiKey: string): Promise<ApiKeys> {
         console.log(
-            `DbPrismaD1Service: Deleting API key: ${apiKey.substring(0, 4)}...`,
+            `DbPrismaService: Deleting API key: ${apiKey.substring(0, 4)}...`,
         );
         try {
+            // Need to delete related usage records first due to foreign key constraint
+            await this.prisma.apiKeyUsage.deleteMany({
+                where: { api_key: apiKey },
+            });
+            console.log(
+                `DbPrismaService: Deleted usage records for API key: ${
+                    apiKey.substring(0, 4)
+                }...`,
+            );
             const deletedKey = await this.prisma.apiKeys.delete({
                 where: { api_key: apiKey },
             });
             console.log(
-                `DbPrismaD1Service: Successfully deleted API key: ${
+                `DbPrismaService: Successfully deleted API key: ${
                     deletedKey.api_key.substring(0, 4)
                 }...`,
             );
             return deletedKey;
         } catch (error) {
             console.error(
-                `DbPrismaD1Service: Error deleting API key ${
+                `DbPrismaService: Error deleting API key ${
                     apiKey.substring(0, 4)
                 }...:`,
                 error,
@@ -304,7 +316,7 @@ export class DbPrismaD1Service implements IDatabaseService {
     ): Promise<ApiKeyUsage[]> {
         const logModel = model ? ` for model ${model}` : "";
         console.log(
-            `DbPrismaD1Service: Getting usage for API key: ${
+            `DbPrismaService: Getting usage for API key: ${
                 apiKey.substring(0, 4)
             }...${logModel}`,
         );
@@ -319,14 +331,14 @@ export class DbPrismaD1Service implements IDatabaseService {
                 },
             });
             console.log(
-                `DbPrismaD1Service: Found ${usage.length} usage records for API key ${
+                `DbPrismaService: Found ${usage.length} usage records for API key ${
                     apiKey.substring(0, 4)
                 }...${logModel}`,
             );
             return usage;
         } catch (error) {
             console.error(
-                `DbPrismaD1Service: Error getting usage for API key ${
+                `DbPrismaService: Error getting usage for API key ${
                     apiKey.substring(0, 4)
                 }...${logModel}:`,
                 error,
@@ -336,7 +348,7 @@ export class DbPrismaD1Service implements IDatabaseService {
     }
 
     async getAllApiKeyUsage(): Promise<ApiKeyUsage[]> {
-        console.log(`DbPrismaD1Service: Getting all API key usage records.`);
+        console.log(`DbPrismaService: Getting all API key usage records.`);
         try {
             const allUsage = await this.prisma.apiKeyUsage.findMany({
                 orderBy: [
@@ -345,24 +357,26 @@ export class DbPrismaD1Service implements IDatabaseService {
                 ],
             });
             console.log(
-                `DbPrismaD1Service: Found ${allUsage.length} total usage records.`,
+                `DbPrismaService: Found ${allUsage.length} total usage records.`,
             );
             return allUsage;
         } catch (error) {
             console.error(
-                `DbPrismaD1Service: Error getting all API key usage records:`,
+                `DbPrismaService: Error getting all API key usage records:`,
                 error,
             );
             throw error;
         }
     }
 
+    // This method seems redundant with createApiKey, keeping for compatibility if needed
+    // but marking as potentially deprecated.
     async addKey(apiKey: string): Promise<void> {
         console.warn(
-            `DbPrismaD1Service: addKey is deprecated. Use createApiKey for adding new keys.`,
+            `DbPrismaService: addKey is potentially deprecated. Use createApiKey for adding new keys.`,
         );
         console.log(
-            `DbPrismaD1Service: Upserting key: ${
+            `DbPrismaService: Upserting key: ${
                 apiKey.substring(0, 4)
             }... to ApiKeys`,
         );
@@ -370,16 +384,16 @@ export class DbPrismaD1Service implements IDatabaseService {
             await this.prisma.apiKeys.upsert({
                 where: { api_key: apiKey },
                 create: { api_key: apiKey },
-                update: {},
+                update: {}, // No update needed if it exists
             });
             console.log(
-                `DbPrismaD1Service: Key ${
+                `DbPrismaService: Key ${
                     apiKey.substring(0, 4)
                 }... upserted or already exists in ApiKeys.`,
             );
         } catch (error) {
             console.error(
-                `DbPrismaD1Service: Error upserting key ${
+                `DbPrismaService: Error upserting key ${
                     apiKey.substring(0, 4)
                 }...:`,
                 error,

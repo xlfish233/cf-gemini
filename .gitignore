@@ -19,6 +19,8 @@ node_modules/
 .env
 .env.production
 .dev.vars
+dev.db
+dev.db-journal
 
 # logs
 logs/
