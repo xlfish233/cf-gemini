@@ -125,7 +125,11 @@ export const ProxyHandler = async (c: Context<{ Bindings: Env, Variables: Variab
     responseHeaders.delete('content-encoding');
 
 
-    return new Response(response.body, {
+    // 读取完整的响应体
+    const body = await response.arrayBuffer();
+
+    // 使用读取到的完整响应体创建新的 Response 对象
+    return new Response(body, {
         status: response.status,
         statusText: response.statusText,
         headers: responseHeaders
