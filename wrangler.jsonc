@@ -8,7 +8,7 @@
   ],
   // 禁用 Workers Logs (根据文档)
   "observability": {
-    "enabled": true
+    "enabled": false
   },
   "d1_databases": [
     {

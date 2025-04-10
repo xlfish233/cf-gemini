@@ -1,17 +1,14 @@
-import type { ApiKeys, ApiKeyUsage } from '../generated/prisma'; // Import Prisma types
+import type { ApiKeys, ApiKeyUsage } from '../generated/prisma';
 
 export interface IDatabaseService {
     checkDbConnection(): Promise<boolean>;
     getBestApiKey(model: string): Promise<string | null>;
-    addErrorCount(apiKey: string, model: string): Promise<void>; // Added model
+    addErrorCount(apiKey: string, model: string): Promise<void>;
     addUsage(apiKey: string, model: string): Promise<void>;
-    // ApiKey CRUD
     createApiKey(apiKey: string): Promise<ApiKeys>;
     getApiKey(apiKey: string): Promise<ApiKeys | null>;
     getAllApiKeys(): Promise<ApiKeys[]>;
-    deleteApiKey(apiKey: string): Promise<ApiKeys>; // Returns the deleted key
-
-    // ApiKeyUsage Queries
-    getApiKeyUsage(apiKey: string, model?: string): Promise<ApiKeyUsage[]>; // Get usage for a specific key, optionally filtered by model
-    getAllApiKeyUsage(): Promise<ApiKeyUsage[]>; // Get all usage records
+    deleteApiKey(apiKey: string): Promise<ApiKeys>;
+    getApiKeyUsage(apiKey: string, model?: string): Promise<ApiKeyUsage[]>;
+    getAllApiKeyUsage(): Promise<ApiKeyUsage[]>;
 }

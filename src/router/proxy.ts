@@ -1,20 +1,17 @@
-import { Hono, Context } from "hono"; // Import Hono if needed for types
-import { IDatabaseService } from '../db/interface'; // Import the interface
-import type { D1Database } from '@cloudflare/workers-types'; // Import D1 type if needed elsewhere, or rely on Env
+import { Hono, Context } from "hono";
+import { IDatabaseService } from '../db/interface';
+import type { D1Database } from '@cloudflare/workers-types';
 
-// Define types for Hono Context
 type Env = {
-  DB: D1Database; // D1 Binding expected in wrangler.toml
-  TARGET_API_HOST?: string; // Optional: Target API host from env
-  // Add other bindings/variables as needed
+  DB: D1Database;
+  TARGET_API_HOST?: string;
+
 }
 type Variables = {
-  dbService: IDatabaseService; // dbService instance injected via middleware
+  dbService: IDatabaseService;
 }
 
-// Use standard typed Context, relying on Hono's CF worker support for executionCtx
 export const ProxyHandler = async (c: Context<{ Bindings: Env, Variables: Variables }>) => {
-    // Get dbService instance from context (set by middleware)
     const dbService = c.var.dbService;
     if (!dbService) {
         console.error("Database service not available in context");
@@ -23,13 +20,10 @@ export const ProxyHandler = async (c: Context<{ Bindings: Env, Variables: Variab
 
     const url = new URL(c.req.url);
     const originalPath = url.pathname;
-    // Target API address, read from environment or use default
     const targetApiHost = c.env.TARGET_API_HOST || "generativelanguage.googleapis.com";
     url.host = targetApiHost;
-    // Remove prefix if your Hono route includes it, e.g., /proxy
-    // url.pathname = url.pathname.replace(/^\/proxy/, ''); // Adjust if needed
 
-    // Extract model name and method (e.g., from /v1beta/models/gemini-pro:generateContent)
+
     const pathSegments = originalPath.split('/');
     let model: string | undefined;
     let method: string | undefined;
@@ -50,7 +44,7 @@ export const ProxyHandler = async (c: Context<{ Bindings: Env, Variables: Variab
 
     let apiKey: string | null = null;
     try {
-        apiKey = await dbService.getBestApiKey(model); // Use the instance from context
+        apiKey = await dbService.getBestApiKey(model);
     } catch (error) {
         console.error(`Error getting API key for model ${model}:`, error);
         return c.text("Internal server error retrieving API key", {
@@ -61,29 +55,28 @@ export const ProxyHandler = async (c: Context<{ Bindings: Env, Variables: Variab
     if (!apiKey) {
         console.error(`No API key available for model: ${model}`);
         return c.text(`No API key available for model ${model}`, {
-            status: 503, // Service Unavailable is appropriate
+            status: 503,
         });
     }
 
     console.log(`Using key: ${apiKey.substring(0, 4)}... for model: ${model}`);
 
     const newHeaders = new Headers(c.req.raw.headers);
-    newHeaders.set("x-goog-api-key", apiKey); // Google uses x-goog-api-key
-    newHeaders.delete("host"); // Remove original host
-    newHeaders.delete("authorization"); // Remove original auth
-    // Consider removing other headers like 'cf-connecting-ip', etc. if needed
+    newHeaders.set("x-goog-api-key", apiKey);
+    newHeaders.delete("host");
+    newHeaders.delete("authorization");
+
 
     let response: Response;
     try {
         const targetUrl = url.toString();
         console.log(`Forwarding request to: ${targetUrl}`);
         response = await fetch(
-            new Request(targetUrl, { // Use the modified targetUrl
+            new Request(targetUrl, {
                 method: c.req.method,
-                body: c.req.raw.body, // Stream body if possible for large requests
+                body: c.req.raw.body,
                 headers: newHeaders,
-                // Pass Cloudflare-specific options if needed
-                // cf: c.req.raw.cf,
+
             }),
         );
     } catch (fetchError) {
@@ -92,39 +85,33 @@ export const ProxyHandler = async (c: Context<{ Bindings: Env, Variables: Variab
                 apiKey.substring(0, 4)
             }...:`, fetchError);
 
-        // Record error count asynchronously without blocking the response
         c.executionCtx.waitUntil((async () => {
             try {
-                await dbService.addErrorCount(apiKey, model); // Pass model
+                await dbService.addErrorCount(apiKey, model);
             } catch (dbError) {
                 console.error(`waitUntil: Error recording error count after fetch failure for key ${apiKey.substring(0,4)}...:`, dbError);
             }
         })());
 
         return c.text("Failed to communicate with the upstream API", {
-            status: 502, // Bad Gateway
+            status: 502,
         });
     }
 
-    // Use waitUntil for database operations after getting the response
     c.executionCtx.waitUntil((async () => {
         try {
-            // Record usage and potentially errors based on response status
-            if (!response.ok) { // Check status codes 200-299
+            if (!response.ok) {
                 console.warn(
                     `waitUntil: Target API returned non-OK status ${response.status} for model ${model} using key ${
                         apiKey.substring(0, 4)
                     }...`,
                 );
-                // Increment error count for specific error statuses (e.g., rate limits, invalid key, server errors)
                 if (response.status === 429 || response.status === 400 || response.status >= 500) {
-                    await dbService.addErrorCount(apiKey, model); // Pass model
+                    await dbService.addErrorCount(apiKey, model);
                 }
-                // Record usage attempt regardless
                 await dbService.addUsage(apiKey, model);
             } else {
-                // Successful response from target API
-                await dbService.addUsage(apiKey, model); // Record successful usage
+                await dbService.addUsage(apiKey, model);
             }
         } catch (dbError) {
             console.error(
@@ -134,12 +121,9 @@ export const ProxyHandler = async (c: Context<{ Bindings: Env, Variables: Variab
         }
     })());
 
-    // Return the response from the target API back to the client immediately
-    // Create a new response to make headers mutable
     const responseHeaders = new Headers(response.headers);
-    // Allow Cloudflare to handle compression, etc.
     responseHeaders.delete('content-encoding');
-    // Add/remove other headers as needed
+
 
     return new Response(response.body, {
         status: response.status,
