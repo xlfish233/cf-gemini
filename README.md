@@ -50,6 +50,13 @@
             ```
             `wrangler dev` 会优先加载此文件中的变量。
 
+    *   **代理响应流式传输 (`PROXY_STREAMING_RESPONSE`)** (可选):
+        控制代理转发的响应是否以流式方式返回给客户端。
+        *   设置为 `"true"`: 启用流式响应。适用于需要尽快开始接收数据的场景。
+        *   未设置或设置为其他值 (例如 `"false"`): 禁用流式响应。Worker 会等待接收完整的上游响应体，然后再将其一次性返回给客户端。这是默认行为。
+        *   **本地开发**: 在 `.dev.vars` 中添加 `PROXY_STREAMING_RESPONSE="true"` 来启用流式传输。
+        *   **生产环境**: 使用 `npx wrangler secret put PROXY_STREAMING_RESPONSE` 并输入 `true` 来启用。如果不需要流式传输，则无需设置此 Secret。
+
     *   **Cloudflare D1 数据库**:
         *   **创建数据库**: 如果你还没有 D1 数据库，请创建一个：
             ```bash

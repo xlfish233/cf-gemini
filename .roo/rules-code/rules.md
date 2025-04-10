@@ -6,7 +6,7 @@
 *   **运行时**: Cloudflare Workers (`@cloudflare/workers-types`, `wrangler`)
 *   **语言**: TypeScript (`tsconfig.json`)
 *   **包管理器**: Bun (`bun.lock`)
-*   **构建/部署工具**: Wrangler (`wrangler.jsonc`, `package.json` scripts)
+*   **构建/部署工具**: Wrangler (`wrangler.jsonc`, `package.json` scripts, 环境变量如 `API_AUTH_KEY`, `PROXY_STREAMING_RESPONSE`)
 *   **JSX**: Hono JSX (`tsconfig.json`)
 *   **Orm**: Prisma
 *   **数据库** Cloudflare Worker D1

@@ -5,7 +5,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 type Env = {
   DB: D1Database;
   TARGET_API_HOST?: string;
-
+  PROXY_STREAMING_RESPONSE?: string; // "true" for streaming, "false" or undefined for non-streaming
 }
 type Variables = {
   dbService: IDatabaseService;
@@ -125,13 +125,25 @@ export const ProxyHandler = async (c: Context<{ Bindings: Env, Variables: Variab
     responseHeaders.delete('content-encoding');
 
 
-    // 读取完整的响应体
-    const body = await response.arrayBuffer();
+    // 根据环境变量决定是否流式传输
+    const isStreaming = c.env.PROXY_STREAMING_RESPONSE === "true";
 
-    // 使用读取到的完整响应体创建新的 Response 对象
-    return new Response(body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: responseHeaders
-    });
+    if (isStreaming) {
+        // 流式返回
+        console.log("Proxying response (streaming)");
+        return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders
+        });
+    } else {
+        // 读取完整的响应体再返回
+        console.log("Proxying response (non-streaming)");
+        const body = await response.arrayBuffer();
+        return new Response(body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders
+        });
+    }
 };
