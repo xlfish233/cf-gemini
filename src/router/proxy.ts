@@ -12,7 +12,7 @@ type Variables = {
   dbService: IDatabaseService; // dbService instance injected via middleware
 }
 
-// Use typed Context
+// Use standard typed Context, relying on Hono's CF worker support for executionCtx
 export const ProxyHandler = async (c: Context<{ Bindings: Env, Variables: Variables }>) => {
     // Get dbService instance from context (set by middleware)
     const dbService = c.var.dbService;
@@ -90,49 +90,51 @@ export const ProxyHandler = async (c: Context<{ Bindings: Env, Variables: Variab
         console.error(
             `Error fetching from target API (${targetApiHost}) for model ${model} with key ${
                 apiKey.substring(0, 4)
-            }...:`,
-            fetchError,
-        );
-        // Record error count on fetch failure
-        try {
-            await dbService.addErrorCount(apiKey, model); // Pass model
-        } catch (dbError) {
-             console.error(`Error recording error count after fetch failure for key ${apiKey.substring(0,4)}...:`, dbError);
-        }
+            }...:`, fetchError);
+
+        // Record error count asynchronously without blocking the response
+        c.executionCtx.waitUntil((async () => {
+            try {
+                await dbService.addErrorCount(apiKey, model); // Pass model
+            } catch (dbError) {
+                console.error(`waitUntil: Error recording error count after fetch failure for key ${apiKey.substring(0,4)}...:`, dbError);
+            }
+        })());
+
         return c.text("Failed to communicate with the upstream API", {
             status: 502, // Bad Gateway
         });
     }
 
-    try {
-        // Record usage and potentially errors based on response status
-        if (!response.ok) { // Check status codes 200-299
-            console.warn(
-                `Target API returned non-OK status ${response.status} for model ${model} using key ${
-                    apiKey.substring(0, 4)
-                }...`,
-            );
-            // Increment error count for specific error statuses (e.g., rate limits, invalid key, server errors)
-            if (response.status === 429 || response.status === 400 || response.status >= 500) {
-                 await dbService.addErrorCount(apiKey, model); // Pass model
+    // Use waitUntil for database operations after getting the response
+    c.executionCtx.waitUntil((async () => {
+        try {
+            // Record usage and potentially errors based on response status
+            if (!response.ok) { // Check status codes 200-299
+                console.warn(
+                    `waitUntil: Target API returned non-OK status ${response.status} for model ${model} using key ${
+                        apiKey.substring(0, 4)
+                    }...`,
+                );
+                // Increment error count for specific error statuses (e.g., rate limits, invalid key, server errors)
+                if (response.status === 429 || response.status === 400 || response.status >= 500) {
+                    await dbService.addErrorCount(apiKey, model); // Pass model
+                }
+                // Record usage attempt regardless
+                await dbService.addUsage(apiKey, model);
+            } else {
+                // Successful response from target API
+                await dbService.addUsage(apiKey, model); // Record successful usage
             }
-            // Always record usage attempt? Or only on success?
-            // Current implementation records usage regardless via upsert.
-            await dbService.addUsage(apiKey, model);
-        } else {
-            // Successful response from target API
-            await dbService.addUsage(apiKey, model); // Record successful usage
+        } catch (dbError) {
+            console.error(
+                `waitUntil: Error recording usage/error for key ${
+                    apiKey.substring(0, 4)
+                }..., model ${model}:`, dbError);
         }
-    } catch (dbError) {
-        console.error(
-            `Error recording usage/error for key ${
-                apiKey.substring(0, 4)
-            }..., model ${model}:`,
-            dbError,
-        );
-    }
+    })());
 
-    // Return the response from the target API back to the client
+    // Return the response from the target API back to the client immediately
     // Create a new response to make headers mutable
     const responseHeaders = new Headers(response.headers);
     // Allow Cloudflare to handle compression, etc.
