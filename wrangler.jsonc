@@ -6,12 +6,18 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  
+  // 禁用 Workers Logs (根据文档)
+  "observability": {
+    "enabled": true
+  },
   "d1_databases": [
     {
       "binding": "DB", // Changed binding name to DB
       "database_name": "cf-gemini-db", // Provide a database name
       "database_id": "fa3a85cc-9d66-422f-8e4b-a4c83b3bef70" // Updated with created DB ID
     }
-  ]
+  ],
+  "placement": {
+    "mode": "smart"
+  }
 }
